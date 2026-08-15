@@ -1,0 +1,138 @@
+:root {
+  --foam: #f3f9fa;
+  --teal: #1f7a8c;
+  --teal-dark: #145a68;
+  --ink: #14313b;
+  --line: #d9e7ea;
+  --card: #ffffff;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Manrope', sans-serif;
+  color: var(--ink);
+  background: var(--foam);
+  line-height: 1.6;
+  padding: 24px;
+}
+
+.wrap {
+  max-width: 560px;
+  margin: 40px auto;
+}
+
+h1 {
+  font-family: 'Fraunces', serif;
+  font-size: 28px;
+  margin: 0 0 8px;
+}
+
+.subtitle {
+  color: #3d5a63;
+  margin: 0 0 28px;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.tab {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.tab.active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+.dropzone {
+  position: relative;
+  border: 2px dashed var(--line);
+  border-radius: 14px;
+  padding: 32px;
+  text-align: center;
+  background: var(--card);
+}
+
+.dropzone input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+#dropText {
+  margin: 0;
+  color: #3d5a63;
+}
+
+.hint {
+  font-size: 13px;
+  color: #7f9aa2;
+  margin: 12px 0 0;
+}
+
+.btn {
+  margin-top: 20px;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  background: var(--teal);
+  color: #fff;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  background: #b7cdd2;
+  cursor: not-allowed;
+}
+
+.status {
+  margin-top: 20px;
+  font-size: 15px;
+  color: var(--teal-dark);
+  font-weight: 600;
+}
+
+.result {
+  margin-top: 24px;
+}
+
+.result img, .result video {
+  max-width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+
+.result a.download {
+  display: inline-block;
+  margin-top: 12px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  background: var(--ink);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.error {
+  color: #b3261e;
+  font-weight: 600;
+}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Улучшение фото и видео — тестовое приложение</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="wrap">
+  <h1>Улучшение качества фото и видео</h1>
+  <p class="subtitle">Тестовая версия. Загружай файл, выбирай тип, жди результат.</p>
+
+  <div class="tabs">
+    <button class="tab active" data-type="photo">Фото</button>
+    <button class="tab" data-type="video">Видео</button>
+  </div>
+
+  <div class="dropzone" id="dropzone">
+    <input type="file" id="fileInput" accept="image/*">
+    <p id="dropText">Выбери файл фото (JPG/PNG)</p>
+  </div>
+
+  <p class="hint" id="sizeHint">Для теста файл до ~4 МБ. Для видео большего размера понадобится доработка — обсудим после первых тестов.</p>
+
+  <button class="btn" id="submitBtn" disabled>Улучшить</button>
+
+  <div class="status" id="status"></div>
+
+  <div class="result" id="result"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
