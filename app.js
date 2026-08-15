@@ -96,16 +96,29 @@ submitBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
   submitBtn.disabled = true;
   resultEl.innerHTML = '';
-  statusEl.textContent = 'Загружаю файл…';
 
   try {
-    const dataUri = await fileToDataUri(selectedFile);
+    let body;
+
+    if (currentType === 'photo') {
+      statusEl.textContent = 'Загружаю файл…';
+      const dataUri = await fileToDataUri(selectedFile);
+      body = { type: 'photo', file: dataUri };
+    } else {
+      statusEl.textContent = 'Загружаю видео в хранилище…';
+      const blob = await window.vercelBlobUpload(selectedFile.name, selectedFile, {
+        access: 'public',
+        handleUploadUrl: '/api/blob-upload',
+      });
+      body = { type: 'video', videoUrl: blob.url };
+    }
+
     statusEl.textContent = 'Отправляю на обработку…';
 
     const r = await fetch('/api/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: currentType, file: dataUri }),
+      body: JSON.stringify(body),
     });
     const data = await r.json();
 

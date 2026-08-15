@@ -24,7 +24,7 @@
     <p id="dropText">Выбери файл фото (JPG/PNG)</p>
   </div>
 
-  <p class="hint" id="sizeHint">Для теста файл до ~4 МБ. Для видео большего размера понадобится доработка — обсудим после первых тестов.</p>
+  <p class="hint" id="sizeHint">Фото — до ~4 МБ. Видео — до 500 МБ, загружается напрямую в хранилище.</p>
 
   <button class="btn" id="submitBtn" disabled>Улучшить</button>
 
@@ -33,6 +33,7 @@
   <div class="result" id="result"></div>
 </div>
 
+<script src="vercel-blob-client.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
