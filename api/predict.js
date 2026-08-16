@@ -21,7 +21,7 @@ export default async function handler(req, res) {
       input = { image: file, scale_factor: 2 };
     } else {
       if (!videoUrl) return res.status(400).json({ error: 'Нужен videoUrl' });
-      input = { video_url: videoUrl, target_resolution: '4k', target_fps: '30fps' };
+      input = { video: videoUrl, target_resolution: '4k', target_fps: 60, scene: 'common' };
     }
 
     const r = await fetch('https://api.replicate.com/v1/predictions', {
