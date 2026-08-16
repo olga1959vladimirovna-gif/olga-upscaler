@@ -1,16 +1,32 @@
 let currentType = 'photo';
 let selectedFile = null;
 
-const tabs = document.querySelectorAll('.tab');
+const viewTabs = document.querySelectorAll('.views .tab');
+const uploadView = document.getElementById('uploadView');
+const historyView = document.getElementById('historyView');
+const historyList = document.getElementById('historyList');
+
+const typeTabs = document.querySelectorAll('.tabs:not(.views) .tab');
 const fileInput = document.getElementById('fileInput');
 const dropText = document.getElementById('dropText');
 const submitBtn = document.getElementById('submitBtn');
 const statusEl = document.getElementById('status');
 const resultEl = document.getElementById('result');
 
-tabs.forEach((tab) => {
+viewTabs.forEach((tab) => {
   tab.addEventListener('click', () => {
-    tabs.forEach((t) => t.classList.remove('active'));
+    viewTabs.forEach((t) => t.classList.remove('active'));
+    tab.classList.add('active');
+    const view = tab.dataset.view;
+    uploadView.style.display = view === 'upload' ? '' : 'none';
+    historyView.style.display = view === 'history' ? '' : 'none';
+    if (view === 'history') loadHistory();
+  });
+});
+
+typeTabs.forEach((tab) => {
+  tab.addEventListener('click', () => {
+    typeTabs.forEach((t) => t.classList.remove('active'));
     tab.classList.add('active');
     currentType = tab.dataset.type;
     fileInput.accept = currentType === 'photo'
@@ -39,16 +55,7 @@ function resetState() {
   resultEl.innerHTML = '';
 }
 
-function fileToDataUri(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-async function poll(id) {
+async function poll(id, type, beforeUrl, params) {
   const r = await fetch('/api/status?id=' + id);
   const data = await r.json();
 
@@ -60,6 +67,7 @@ async function poll(id) {
   if (data.status === 'succeeded') {
     statusEl.textContent = 'Готово!';
     showResult(data.output);
+    saveHistoryEntry(type, beforeUrl, extractUrl(data.output), params);
     return;
   }
 
@@ -69,7 +77,7 @@ async function poll(id) {
   }
 
   statusEl.textContent = 'Обрабатываю… (' + data.status + ')';
-  setTimeout(() => poll(id), 2500);
+  setTimeout(() => poll(id, type, beforeUrl, params), 2500);
 }
 
 function extractUrl(output) {
@@ -94,33 +102,92 @@ function showResult(output) {
   resultEl.innerHTML = el + '<br><a class="download" href="' + url + '" target="_blank" rel="noopener">Скачать результат</a>';
 }
 
+async function saveHistoryEntry(type, beforeUrl, afterUrl, params) {
+  if (!afterUrl) return;
+  try {
+    await fetch('/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, beforeUrl, afterUrl, params }),
+    });
+  } catch (e) {
+    console.error('history save failed', e);
+  }
+}
+
+function formatDate(iso) {
+  const d = new Date(iso);
+  return d.toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function formatParams(params) {
+  if (!params) return '';
+  const parts = [];
+  if (params.scale_factor) parts.push('×' + params.scale_factor);
+  if (params.target_resolution) parts.push(params.target_resolution);
+  if (params.target_fps) parts.push(params.target_fps + ' fps');
+  if (params.scene) parts.push(params.scene);
+  return parts.join(' · ');
+}
+
+function historyItemHtml(entry) {
+  const isPhoto = entry.type === 'photo';
+  const beforeEl = isPhoto
+    ? '<img src="' + entry.beforeUrl + '" alt="До">'
+    : '<video src="' + entry.beforeUrl + '" controls muted></video>';
+  const afterEl = isPhoto
+    ? '<img src="' + entry.afterUrl + '" alt="После">'
+    : '<video src="' + entry.afterUrl + '" controls muted></video>';
+
+  return (
+    '<div class="history-item">' +
+      '<div class="history-meta">' +
+        '<span>' + (isPhoto ? 'Фото' : 'Видео') + '</span>' +
+        '<span>' + formatDate(entry.createdAt) + '</span>' +
+        '<span>' + formatParams(entry.params) + '</span>' +
+      '</div>' +
+      '<div class="history-pair">' +
+        '<div class="history-cell"><span class="history-label">До</span>' + beforeEl + '</div>' +
+        '<div class="history-cell"><span class="history-label">После</span>' + afterEl + '</div>' +
+      '</div>' +
+      '<a class="download" href="' + entry.afterUrl + '" target="_blank" rel="noopener">Скачать результат</a>' +
+    '</div>'
+  );
+}
+
+async function loadHistory() {
+  historyList.innerHTML = '<p class="hint">Загружаю…</p>';
+  try {
+    const r = await fetch('/api/history');
+    const data = await r.json();
+    if (!Array.isArray(data) || data.length === 0) {
+      historyList.innerHTML = '<p class="hint">Пока пусто — здесь появятся твои готовые результаты.</p>';
+      return;
+    }
+    historyList.innerHTML = data.map(historyItemHtml).join('');
+  } catch (e) {
+    historyList.innerHTML = '<p class="error">Не удалось загрузить историю: ' + e.message + '</p>';
+  }
+}
+
 submitBtn.addEventListener('click', async () => {
   if (!selectedFile) return;
   submitBtn.disabled = true;
   resultEl.innerHTML = '';
 
   try {
-    let body;
-
-    if (currentType === 'photo') {
-      statusEl.textContent = 'Загружаю файл…';
-      const dataUri = await fileToDataUri(selectedFile);
-      body = { type: 'photo', file: dataUri };
-    } else {
-      statusEl.textContent = 'Загружаю видео в хранилище…';
-      const blob = await window.vercelBlobUpload(selectedFile.name, selectedFile, {
-        access: 'public',
-        handleUploadUrl: '/api/blob-upload',
-      });
-      body = { type: 'video', videoUrl: blob.url };
-    }
+    statusEl.textContent = 'Загружаю файл в хранилище…';
+    const blob = await window.vercelBlobUpload(selectedFile.name, selectedFile, {
+      access: 'public',
+      handleUploadUrl: '/api/blob-upload',
+    });
 
     statusEl.textContent = 'Отправляю на обработку…';
 
     const r = await fetch('/api/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ type: currentType, fileUrl: blob.url }),
     });
     const data = await r.json();
 
@@ -130,7 +197,7 @@ submitBtn.addEventListener('click', async () => {
       return;
     }
 
-    poll(data.id);
+    poll(data.id, currentType, blob.url, data.params);
   } catch (e) {
     statusEl.innerHTML = '<span class="error">Ошибка: ' + e.message + '</span>';
   } finally {

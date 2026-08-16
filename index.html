@@ -14,23 +14,35 @@
   <h1>Улучшение качества фото и видео</h1>
   <p class="subtitle">Тестовая версия. Загружай файл, выбирай тип, жди результат.</p>
 
-  <div class="tabs">
-    <button class="tab active" data-type="photo">Фото</button>
-    <button class="tab" data-type="video">Видео</button>
+  <div class="tabs views">
+    <button class="tab active" data-view="upload">Обработка</button>
+    <button class="tab" data-view="history">История</button>
   </div>
 
-  <div class="dropzone" id="dropzone">
-    <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.webp">
-    <p id="dropText">Выбери файл фото (JPG/PNG)</p>
+  <div id="uploadView">
+    <div class="tabs">
+      <button class="tab active" data-type="photo">Фото</button>
+      <button class="tab" data-type="video">Видео</button>
+    </div>
+
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.webp">
+      <p id="dropText">Выбери файл фото (JPG/PNG)</p>
+    </div>
+
+    <p class="hint" id="sizeHint">Фото и видео — до 500 МБ, загружаются напрямую в хранилище.</p>
+
+    <button class="btn" id="submitBtn" disabled>Улучшить</button>
+
+    <div class="status" id="status"></div>
+
+    <div class="result" id="result"></div>
   </div>
 
-  <p class="hint" id="sizeHint">Фото — до ~4 МБ. Видео — до 500 МБ, загружается напрямую в хранилище.</p>
-
-  <button class="btn" id="submitBtn" disabled>Улучшить</button>
-
-  <div class="status" id="status"></div>
-
-  <div class="result" id="result"></div>
+  <div id="historyView" style="display:none">
+    <p class="hint" id="historyHint">Здесь сохраняются готовые результаты (до 30 последних, за 30 дней).</p>
+    <div class="history-list" id="historyList"></div>
+  </div>
 </div>
 
 <script src="vercel-blob-client.js"></script>
