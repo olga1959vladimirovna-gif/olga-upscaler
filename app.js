@@ -13,10 +13,12 @@ tabs.forEach((tab) => {
     tabs.forEach((t) => t.classList.remove('active'));
     tab.classList.add('active');
     currentType = tab.dataset.type;
-    fileInput.accept = currentType === 'photo' ? 'image/*' : 'video/*';
+    fileInput.accept = currentType === 'photo'
+      ? 'image/*,.jpg,.jpeg,.png,.webp'
+      : 'video/*,.mov,.mp4,.webm,.m4v,.avi';
     dropText.textContent = currentType === 'photo'
       ? 'Выбери файл фото (JPG/PNG)'
-      : 'Выбери видеофайл (MP4)';
+      : 'Выбери видеофайл (MP4, MOV, WEBM)';
     resetState();
   });
 });

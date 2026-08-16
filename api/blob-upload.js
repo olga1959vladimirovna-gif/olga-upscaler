@@ -9,7 +9,15 @@ export default async function handler(request, response) {
       request,
       onBeforeGenerateToken: async () => {
         return {
-          allowedContentTypes: ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-m4v'],
+          allowedContentTypes: [
+            'video/mp4',
+            'video/quicktime',
+            'video/x-quicktime',
+            'video/webm',
+            'video/x-m4v',
+            'video/x-msvideo',
+            'application/octet-stream',
+          ],
           addRandomSuffix: true,
           maximumSizeInBytes: 500 * 1024 * 1024,
         };
