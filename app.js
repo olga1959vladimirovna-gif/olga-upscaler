@@ -1,4 +1,5 @@
 let currentType = 'photo';
+let currentRatio = '';
 let selectedFile = null;
 
 const viewTabs = document.querySelectorAll('.views .tab');
@@ -7,6 +8,7 @@ const historyView = document.getElementById('historyView');
 const historyList = document.getElementById('historyList');
 
 const typeTabs = document.querySelectorAll('.tabs:not(.views) .tab');
+const ratioBtns = document.querySelectorAll('.ratio-btn');
 const fileInput = document.getElementById('fileInput');
 const dropText = document.getElementById('dropText');
 const submitBtn = document.getElementById('submitBtn');
@@ -39,6 +41,14 @@ typeTabs.forEach((tab) => {
   });
 });
 
+ratioBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    ratioBtns.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentRatio = btn.dataset.ratio;
+  });
+});
+
 fileInput.addEventListener('change', () => {
   selectedFile = fileInput.files[0] || null;
   submitBtn.disabled = !selectedFile;
@@ -55,7 +65,7 @@ function resetState() {
   resultEl.innerHTML = '';
 }
 
-async function poll(id, type, beforeUrl, params) {
+async function poll(id, type, beforeUrl, params, ratio) {
   const r = await fetch('/api/status?id=' + id);
   const data = await r.json();
 
@@ -65,9 +75,8 @@ async function poll(id, type, beforeUrl, params) {
   }
 
   if (data.status === 'succeeded') {
-    statusEl.textContent = 'Готово!';
-    showResult(data.output);
-    saveHistoryEntry(type, beforeUrl, extractUrl(data.output), params);
+    const rawUrl = extractUrl(data.output);
+    finalizeResult(type, beforeUrl, rawUrl, params, ratio);
     return;
   }
 
@@ -77,7 +86,42 @@ async function poll(id, type, beforeUrl, params) {
   }
 
   statusEl.textContent = 'Обрабатываю… (' + data.status + ')';
-  setTimeout(() => poll(id, type, beforeUrl, params), 2500);
+  setTimeout(() => poll(id, type, beforeUrl, params, ratio), 2500);
+}
+
+async function finalizeResult(type, beforeUrl, rawUrl, params, ratio) {
+  if (!rawUrl) {
+    statusEl.innerHTML = '<span class="error">Не удалось получить результат</span>';
+    return;
+  }
+
+  let finalUrl = rawUrl;
+  const finalParams = { ...params };
+
+  if (ratio) {
+    statusEl.textContent = 'Подгоняю под формат ' + ratio + '…';
+    try {
+      const r = await fetch('/api/process-aspect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: rawUrl, ratio, type }),
+      });
+      const data = await r.json();
+      if (data.error) {
+        statusEl.innerHTML = '<span class="error">Ошибка формата: ' + data.error + '</span>';
+        return;
+      }
+      finalUrl = data.url;
+      finalParams.ratio = ratio;
+    } catch (e) {
+      statusEl.innerHTML = '<span class="error">Ошибка формата: ' + e.message + '</span>';
+      return;
+    }
+  }
+
+  statusEl.textContent = 'Готово!';
+  showResult(finalUrl, type);
+  saveHistoryEntry(type, beforeUrl, finalUrl, finalParams);
 }
 
 function extractUrl(output) {
@@ -90,13 +134,8 @@ function extractUrl(output) {
   return null;
 }
 
-function showResult(output) {
-  const url = extractUrl(output);
-  if (!url) {
-    resultEl.innerHTML = '<pre>' + JSON.stringify(output, null, 2) + '</pre>';
-    return;
-  }
-  const el = currentType === 'photo'
+function showResult(url, type) {
+  const el = type === 'photo'
     ? '<img src="' + url + '" alt="Результат">'
     : '<video src="' + url + '" controls></video>';
   resultEl.innerHTML = el + '<br><a class="download" href="' + url + '" target="_blank" rel="noopener">Скачать результат</a>';
@@ -127,6 +166,7 @@ function formatParams(params) {
   if (params.target_resolution) parts.push(params.target_resolution);
   if (params.target_fps) parts.push(params.target_fps + ' fps');
   if (params.scene) parts.push(params.scene);
+  if (params.ratio) parts.push(params.ratio);
   return parts.join(' · ');
 }
 
@@ -197,7 +237,7 @@ submitBtn.addEventListener('click', async () => {
       return;
     }
 
-    poll(data.id, currentType, blob.url, data.params);
+    poll(data.id, currentType, blob.url, data.params, currentRatio);
   } catch (e) {
     statusEl.innerHTML = '<span class="error">Ошибка: ' + e.message + '</span>';
   } finally {

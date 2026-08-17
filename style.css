@@ -89,6 +89,41 @@ h1 {
   margin: 12px 0 0;
 }
 
+.ratio-row {
+  margin-top: 16px;
+}
+
+.ratio-label {
+  display: block;
+  font-size: 13px;
+  color: #7f9aa2;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.ratio-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ratio-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  background: var(--card);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.ratio-btn.active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
 .btn {
   margin-top: 20px;
   width: 100%;
