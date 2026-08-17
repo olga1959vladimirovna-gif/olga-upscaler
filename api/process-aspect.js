@@ -18,7 +18,9 @@ const RATIOS = {
   '1:1': 1,
 };
 
-function cropFilter(width, height, targetRatio) {
+const MIN_SIDE = { photo: 2000, video: 1920 };
+
+function cropPlan(width, height, targetRatio) {
   const sourceRatio = width / height;
   let w = width;
   let h = height;
@@ -31,7 +33,25 @@ function cropFilter(width, height, targetRatio) {
   }
   const x = Math.floor((width - w) / 2);
   const y = Math.floor((height - h) / 2);
-  return `crop=${w}:${h}:${x}:${y}`;
+  return { width: w, height: h, filter: `crop=${w}:${h}:${x}:${y}` };
+}
+
+function padPlan(width, height, targetRatio) {
+  const sourceRatio = width / height;
+  let canvasW = width;
+  let canvasH = height;
+  if (sourceRatio > targetRatio) {
+    canvasH = Math.round(width / targetRatio);
+    if (canvasH % 2 !== 0) canvasH += 1;
+  } else if (sourceRatio < targetRatio) {
+    canvasW = Math.round(height * targetRatio);
+    if (canvasW % 2 !== 0) canvasW += 1;
+  }
+  const filter =
+    `[0:v]scale=${canvasW}:${canvasH}:force_original_aspect_ratio=decrease[fg];` +
+    `[0:v]scale=${canvasW}:${canvasH}:force_original_aspect_ratio=increase,crop=${canvasW}:${canvasH},gblur=sigma=20[bg];` +
+    `[bg][fg]overlay=(W-w)/2:(H-h)/2`;
+  return { width: canvasW, height: canvasH, filter };
 }
 
 async function probeSize(filePath) {
@@ -49,9 +69,10 @@ async function probeSize(filePath) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { url, ratio, type } = req.body || {};
+  const { url, ratio, type, mode } = req.body || {};
   if (!url || !ratio || !type) return res.status(400).json({ error: 'Нужны url, ratio, type' });
   if (!RATIOS[ratio]) return res.status(400).json({ error: 'Неизвестное соотношение: ' + ratio });
+  const useMode = mode === 'pad' ? 'pad' : 'crop';
 
   let dir;
   try {
@@ -66,11 +87,14 @@ export default async function handler(req, res) {
     await writeFile(inputPath, buf);
 
     const { width, height } = await probeSize(inputPath);
-    const filter = cropFilter(width, height, RATIOS[ratio]);
+    const plan = useMode === 'pad'
+      ? padPlan(width, height, RATIOS[ratio])
+      : cropPlan(width, height, RATIOS[ratio]);
 
+    const filterFlag = useMode === 'pad' ? '-filter_complex' : '-vf';
     const args = type === 'photo'
-      ? ['-y', '-i', inputPath, '-vf', filter, outputPath]
-      : ['-y', '-i', inputPath, '-vf', filter, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-c:a', 'copy', outputPath];
+      ? ['-y', '-i', inputPath, filterFlag, plan.filter, outputPath]
+      : ['-y', '-i', inputPath, filterFlag, plan.filter, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18', '-c:a', 'copy', outputPath];
 
     await execFileAsync(ffmpegPath, args);
 
@@ -82,7 +106,13 @@ export default async function handler(req, res) {
       addRandomSuffix: true,
     });
 
-    return res.status(200).json({ url: blob.url, width, height, filter });
+    const minSide = Math.min(plan.width, plan.height);
+    const threshold = MIN_SIDE[type] || 0;
+    const warning = minSide < threshold
+      ? `Итоговое разрешение ${plan.width}×${plan.height} — меньшая сторона (${minSide}px) ниже обычного минимума (${threshold}px) для стоков`
+      : null;
+
+    return res.status(200).json({ url: blob.url, width: plan.width, height: plan.height, mode: useMode, warning });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   } finally {

@@ -176,6 +176,12 @@ h1 {
   font-weight: 600;
 }
 
+.warning {
+  color: #a6720f;
+  font-weight: 600;
+  font-size: 13px;
+}
+
 .history-list {
   display: flex;
   flex-direction: column;

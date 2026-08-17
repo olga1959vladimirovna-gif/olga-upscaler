@@ -1,5 +1,6 @@
 let currentType = 'photo';
 let currentRatio = '';
+let currentMode = 'crop';
 let selectedFile = null;
 
 const viewTabs = document.querySelectorAll('.views .tab');
@@ -8,7 +9,9 @@ const historyView = document.getElementById('historyView');
 const historyList = document.getElementById('historyList');
 
 const typeTabs = document.querySelectorAll('.tabs:not(.views) .tab');
-const ratioBtns = document.querySelectorAll('.ratio-btn');
+const ratioBtns = document.querySelectorAll('.ratio-btn[data-ratio]');
+const modeBtns = document.querySelectorAll('.ratio-btn[data-mode]');
+const modeRow = document.getElementById('modeRow');
 const fileInput = document.getElementById('fileInput');
 const dropText = document.getElementById('dropText');
 const submitBtn = document.getElementById('submitBtn');
@@ -46,6 +49,15 @@ ratioBtns.forEach((btn) => {
     ratioBtns.forEach((b) => b.classList.remove('active'));
     btn.classList.add('active');
     currentRatio = btn.dataset.ratio;
+    modeRow.style.display = currentRatio ? '' : 'none';
+  });
+});
+
+modeBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    modeBtns.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentMode = btn.dataset.mode;
   });
 });
 
@@ -65,7 +77,7 @@ function resetState() {
   resultEl.innerHTML = '';
 }
 
-async function poll(id, type, beforeUrl, params, ratio) {
+async function poll(id, type, beforeUrl, params, ratio, mode) {
   const r = await fetch('/api/status?id=' + id);
   const data = await r.json();
 
@@ -76,7 +88,7 @@ async function poll(id, type, beforeUrl, params, ratio) {
 
   if (data.status === 'succeeded') {
     const rawUrl = extractUrl(data.output);
-    finalizeResult(type, beforeUrl, rawUrl, params, ratio);
+    finalizeResult(type, beforeUrl, rawUrl, params, ratio, mode);
     return;
   }
 
@@ -86,10 +98,10 @@ async function poll(id, type, beforeUrl, params, ratio) {
   }
 
   statusEl.textContent = 'Обрабатываю… (' + data.status + ')';
-  setTimeout(() => poll(id, type, beforeUrl, params, ratio), 2500);
+  setTimeout(() => poll(id, type, beforeUrl, params, ratio, mode), 2500);
 }
 
-async function finalizeResult(type, beforeUrl, rawUrl, params, ratio) {
+async function finalizeResult(type, beforeUrl, rawUrl, params, ratio, mode) {
   if (!rawUrl) {
     statusEl.innerHTML = '<span class="error">Не удалось получить результат</span>';
     return;
@@ -97,6 +109,7 @@ async function finalizeResult(type, beforeUrl, rawUrl, params, ratio) {
 
   let finalUrl = rawUrl;
   const finalParams = { ...params };
+  let warning = null;
 
   if (ratio) {
     statusEl.textContent = 'Подгоняю под формат ' + ratio + '…';
@@ -104,7 +117,7 @@ async function finalizeResult(type, beforeUrl, rawUrl, params, ratio) {
       const r = await fetch('/api/process-aspect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: rawUrl, ratio, type }),
+        body: JSON.stringify({ url: rawUrl, ratio, type, mode }),
       });
       const data = await r.json();
       if (data.error) {
@@ -113,13 +126,15 @@ async function finalizeResult(type, beforeUrl, rawUrl, params, ratio) {
       }
       finalUrl = data.url;
       finalParams.ratio = ratio;
+      finalParams.mode = data.mode;
+      warning = data.warning;
     } catch (e) {
       statusEl.innerHTML = '<span class="error">Ошибка формата: ' + e.message + '</span>';
       return;
     }
   }
 
-  statusEl.textContent = 'Готово!';
+  statusEl.innerHTML = 'Готово!' + (warning ? '<br><span class="warning">⚠ ' + warning + '</span>' : '');
   showResult(finalUrl, type);
   saveHistoryEntry(type, beforeUrl, finalUrl, finalParams);
 }
@@ -167,6 +182,7 @@ function formatParams(params) {
   if (params.target_fps) parts.push(params.target_fps + ' fps');
   if (params.scene) parts.push(params.scene);
   if (params.ratio) parts.push(params.ratio);
+  if (params.mode) parts.push(params.mode === 'pad' ? 'с полями' : 'обрезка');
   return parts.join(' · ');
 }
 
@@ -237,7 +253,7 @@ submitBtn.addEventListener('click', async () => {
       return;
     }
 
-    poll(data.id, currentType, blob.url, data.params, currentRatio);
+    poll(data.id, currentType, blob.url, data.params, currentRatio, currentMode);
   } catch (e) {
     statusEl.innerHTML = '<span class="error">Ошибка: ' + e.message + '</span>';
   } finally {
