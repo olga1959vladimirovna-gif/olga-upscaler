@@ -111,25 +111,30 @@ async function finalizeResult(type, beforeUrl, rawUrl, params, ratio, mode) {
   const finalParams = { ...params };
   let warning = null;
 
-  if (ratio) {
-    statusEl.textContent = 'Подгоняю под формат ' + ratio + '…';
+  // Для видео всегда прогоняем через финальную проверку (звук под стандарт Adobe),
+  // для фото — только если нужно поменять соотношение сторон.
+  if (ratio || type === 'video') {
+    statusEl.textContent = ratio ? ('Подгоняю под формат ' + ratio + '…') : 'Проверяю соответствие требованиям Adobe…';
     try {
       const r = await fetch('/api/process-aspect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: rawUrl, ratio, type, mode }),
+        body: JSON.stringify({ url: rawUrl, ratio: ratio || undefined, type, mode }),
       });
       const data = await r.json();
       if (data.error) {
-        statusEl.innerHTML = '<span class="error">Ошибка формата: ' + data.error + '</span>';
+        statusEl.innerHTML = '<span class="error">Ошибка обработки: ' + data.error + '</span>';
         return;
       }
       finalUrl = data.url;
-      finalParams.ratio = ratio;
-      finalParams.mode = data.mode;
+      if (ratio) {
+        finalParams.ratio = ratio;
+        finalParams.mode = data.mode;
+      }
+      if (data.audioAction) finalParams.audio = data.audioAction;
       warning = data.warning;
     } catch (e) {
-      statusEl.innerHTML = '<span class="error">Ошибка формата: ' + e.message + '</span>';
+      statusEl.innerHTML = '<span class="error">Ошибка обработки: ' + e.message + '</span>';
       return;
     }
   }
@@ -183,6 +188,8 @@ function formatParams(params) {
   if (params.scene) parts.push(params.scene);
   if (params.ratio) parts.push(params.ratio);
   if (params.mode) parts.push(params.mode === 'pad' ? 'с полями' : 'обрезка');
+  if (params.audio === 'strip') parts.push('звук убран (был пустой)');
+  if (params.audio === 'normalize') parts.push('звук приведён к 48кГц/16-бит');
   return parts.join(' · ');
 }
 
