@@ -1,6 +1,11 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
+import { writeFile, mkdtemp, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import path from 'path';
 import ffprobeStatic from 'ffprobe-static';
+
+export const maxDuration = 60;
 
 const VERSIONS = {
   photo: 'dfad41707589d68ecdccd1dfa600d55a208f9310748e44bfe35b4a6291453d5e',
@@ -11,16 +16,27 @@ const execFileAsync = promisify(execFile);
 const ADOBE_FPS_OPTIONS = [24, 30, 60];
 
 async function probeSourceFps(url) {
-  const { stdout } = await execFileAsync(ffprobeStatic.path, [
-    '-v', 'error',
-    '-select_streams', 'v:0',
-    '-show_entries', 'stream=r_frame_rate',
-    '-of', 'csv=s=x:p=0',
-    url,
-  ]);
-  const [num, den] = stdout.trim().split('/').map(Number);
-  if (!num || !den) return 30;
-  return num / den;
+  let dir;
+  try {
+    dir = await mkdtemp(path.join(tmpdir(), 'fpsprobe-'));
+    const filePath = path.join(dir, 'source.mp4');
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('Не удалось скачать файл для проверки fps');
+    await writeFile(filePath, Buffer.from(await r.arrayBuffer()));
+
+    const { stdout } = await execFileAsync(ffprobeStatic.path, [
+      '-v', 'error',
+      '-select_streams', 'v:0',
+      '-show_entries', 'stream=r_frame_rate',
+      '-of', 'csv=s=x:p=0',
+      filePath,
+    ]);
+    const [num, den] = stdout.trim().split('/').map(Number);
+    if (!num || !den) return 30;
+    return num / den;
+  } finally {
+    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 function nearestAdobeFps(sourceFps) {
