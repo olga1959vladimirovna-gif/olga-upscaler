@@ -244,9 +244,16 @@ h1 {
   margin-bottom: 6px;
 }
 
+.history-item-footer {
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .history-item .download {
   display: inline-block;
-  margin-top: 14px;
   padding: 8px 16px;
   border-radius: 10px;
   background: var(--ink);
@@ -254,6 +261,21 @@ h1 {
   text-decoration: none;
   font-weight: 600;
   font-size: 13px;
+}
+
+.history-action-btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  border: 1.5px solid var(--teal);
+  background: #fff;
+  color: var(--teal-dark);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.history-action-btn:hover {
+  background: var(--foam);
 }
 
 @media (max-width: 480px) {

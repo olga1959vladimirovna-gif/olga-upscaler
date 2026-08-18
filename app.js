@@ -3,6 +3,8 @@ let currentRatio = '';
 let currentMode = 'crop';
 let currentAudioMode = 'remove';
 let selectedFile = null;
+let pendingUploadUrl = null;
+let pendingExtendUrl = null;
 
 const viewTabs = document.querySelectorAll('.views .tab');
 const uploadView = document.getElementById('uploadView');
@@ -77,6 +79,7 @@ modeBtns.forEach((btn) => {
 
 fileInput.addEventListener('change', () => {
   selectedFile = fileInput.files[0] || null;
+  pendingUploadUrl = null;
   submitBtn.disabled = !selectedFile;
   if (selectedFile) {
     dropText.textContent = selectedFile.name + ' (' + Math.round(selectedFile.size / 1024) + ' КБ)';
@@ -85,10 +88,29 @@ fileInput.addEventListener('change', () => {
 
 function resetState() {
   selectedFile = null;
+  pendingUploadUrl = null;
   fileInput.value = '';
   submitBtn.disabled = true;
   statusEl.textContent = '';
   resultEl.innerHTML = '';
+}
+
+function useHistoryResult(url, type, target) {
+  if (target === 'upload') {
+    document.querySelector('.views .tab[data-view="upload"]').click();
+    const typeBtn = document.querySelector('.tabs:not(.views) .tab[data-type="' + type + '"]');
+    if (typeBtn) typeBtn.click();
+    pendingUploadUrl = url;
+    selectedFile = null;
+    dropText.textContent = 'Используется результат из истории ✓';
+    submitBtn.disabled = false;
+  } else if (target === 'extend') {
+    document.querySelector('.views .tab[data-view="extend"]').click();
+    pendingExtendUrl = url;
+    extendSelectedFile = null;
+    extendDropText.textContent = 'Используется результат из истории ✓';
+    extendBtn.disabled = false;
+  }
 }
 
 async function poll(id, type, beforeUrl, params, ratio, mode, audioMode) {
@@ -221,6 +243,11 @@ function historyItemHtml(entry) {
     ? '<img src="' + entry.afterUrl + '" alt="После">'
     : '<video src="' + entry.afterUrl + '" controls muted></video>';
 
+  const actions = ['<button class="history-action-btn" data-use-url="' + entry.afterUrl + '" data-use-type="' + entry.type + '" data-use-target="upload">→ Улучшить</button>'];
+  if (!isPhoto) {
+    actions.push('<button class="history-action-btn" data-use-url="' + entry.afterUrl + '" data-use-type="video" data-use-target="extend">→ Продлить</button>');
+  }
+
   return (
     '<div class="history-item">' +
       '<div class="history-meta">' +
@@ -232,10 +259,19 @@ function historyItemHtml(entry) {
         '<div class="history-cell"><span class="history-label">До</span>' + beforeEl + '</div>' +
         '<div class="history-cell"><span class="history-label">После</span>' + afterEl + '</div>' +
       '</div>' +
-      '<a class="download" href="' + entry.afterUrl + '" target="_blank" rel="noopener">Скачать результат</a>' +
+      '<div class="history-item-footer">' +
+        '<a class="download" href="' + entry.afterUrl + '" target="_blank" rel="noopener">Скачать результат</a>' +
+        actions.join('') +
+      '</div>' +
     '</div>'
   );
 }
+
+historyList.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-use-url]');
+  if (!btn) return;
+  useHistoryResult(btn.dataset.useUrl, btn.dataset.useType, btn.dataset.useTarget);
+});
 
 async function loadHistory() {
   historyList.innerHTML = '<p class="hint">Загружаю…</p>';
@@ -253,23 +289,30 @@ async function loadHistory() {
 }
 
 submitBtn.addEventListener('click', async () => {
-  if (!selectedFile) return;
+  if (!selectedFile && !pendingUploadUrl) return;
   submitBtn.disabled = true;
   resultEl.innerHTML = '';
 
   try {
-    statusEl.textContent = 'Загружаю файл в хранилище…';
-    const blob = await window.vercelBlobUpload(selectedFile.name, selectedFile, {
-      access: 'public',
-      handleUploadUrl: '/api/blob-upload',
-    });
+    let sourceUrl;
+    if (pendingUploadUrl) {
+      sourceUrl = pendingUploadUrl;
+      pendingUploadUrl = null;
+    } else {
+      statusEl.textContent = 'Загружаю файл в хранилище…';
+      const blob = await window.vercelBlobUpload(selectedFile.name, selectedFile, {
+        access: 'public',
+        handleUploadUrl: '/api/blob-upload',
+      });
+      sourceUrl = blob.url;
+    }
 
     statusEl.textContent = 'Отправляю на обработку…';
 
     const r = await fetch('/api/predict', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: currentType, fileUrl: blob.url }),
+      body: JSON.stringify({ type: currentType, fileUrl: sourceUrl }),
     });
     const data = await r.json();
 
@@ -279,7 +322,7 @@ submitBtn.addEventListener('click', async () => {
       return;
     }
 
-    poll(data.id, currentType, blob.url, data.params, currentRatio, currentMode, currentAudioMode);
+    poll(data.id, currentType, sourceUrl, data.params, currentRatio, currentMode, currentAudioMode);
   } catch (e) {
     statusEl.innerHTML = '<span class="error">Ошибка: ' + e.message + '</span>';
   } finally {
@@ -308,6 +351,7 @@ extendMethodBtns.forEach((btn) => {
 
 extendFileInput.addEventListener('change', () => {
   extendSelectedFile = extendFileInput.files[0] || null;
+  pendingExtendUrl = null;
   extendBtn.disabled = !extendSelectedFile;
   if (extendSelectedFile) {
     extendDropText.textContent = extendSelectedFile.name + ' (' + Math.round(extendSelectedFile.size / 1024) + ' КБ)';
@@ -315,16 +359,23 @@ extendFileInput.addEventListener('change', () => {
 });
 
 extendBtn.addEventListener('click', async () => {
-  if (!extendSelectedFile) return;
+  if (!extendSelectedFile && !pendingExtendUrl) return;
   extendBtn.disabled = true;
   extendResultEl.innerHTML = '';
 
   try {
-    extendStatusEl.textContent = 'Загружаю файл в хранилище…';
-    const blob = await window.vercelBlobUpload(extendSelectedFile.name, extendSelectedFile, {
-      access: 'public',
-      handleUploadUrl: '/api/blob-upload',
-    });
+    let sourceUrl;
+    if (pendingExtendUrl) {
+      sourceUrl = pendingExtendUrl;
+      pendingExtendUrl = null;
+    } else {
+      extendStatusEl.textContent = 'Загружаю файл в хранилище…';
+      const blob = await window.vercelBlobUpload(extendSelectedFile.name, extendSelectedFile, {
+        access: 'public',
+        handleUploadUrl: '/api/blob-upload',
+      });
+      sourceUrl = blob.url;
+    }
 
     extendStatusEl.textContent = 'Продлеваю видео…';
 
@@ -332,7 +383,7 @@ extendBtn.addEventListener('click', async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        url: blob.url,
+        url: sourceUrl,
         targetDuration: targetDurationInput.value,
         method: extendMethod,
       }),
@@ -349,7 +400,7 @@ extendBtn.addEventListener('click', async () => {
       '<video src="' + data.url + '" controls></video><br>' +
       '<a class="download" href="' + data.url + '" target="_blank" rel="noopener">Скачать результат</a>';
 
-    saveHistoryEntry('video', blob.url, data.url, { action: 'extend', method: data.method, duration: data.duration });
+    saveHistoryEntry('video', sourceUrl, data.url, { action: 'extend', method: data.method, duration: data.duration });
   } catch (e) {
     extendStatusEl.innerHTML = '<span class="error">Ошибка: ' + e.message + '</span>';
   } finally {
