@@ -101,15 +101,14 @@ export default async function handler(req, res) {
         ? (useMode === 'pad' ? padPlan(width, height, RATIOS[ratio]) : cropPlan(width, height, RATIOS[ratio]))
         : { width, height, filter: null };
 
-      const outputPath = path.join(dir, 'output.png');
-      const args = plan.filter
-        ? ['-y', '-i', inputPath, plan.filter.includes('[') ? '-filter_complex' : '-vf', plan.filter, outputPath]
-        : ['-y', '-i', inputPath, outputPath];
+      const outputPath = path.join(dir, 'output.jpg');
+      const filterArgs = plan.filter ? [plan.filter.includes('[') ? '-filter_complex' : '-vf', plan.filter] : [];
+      const args = ['-y', '-i', inputPath, ...filterArgs, '-q:v', '2', '-pix_fmt', 'yuvj420p', outputPath];
       await execFileAsync(ffmpegPath, args);
 
       const outBuf = await readFile(outputPath);
-      const blob = await put('aspect-' + Date.now() + '.png', outBuf, {
-        access: 'public', contentType: 'image/png', addRandomSuffix: true,
+      const blob = await put('aspect-' + Date.now() + '.jpg', outBuf, {
+        access: 'public', contentType: 'image/jpeg', addRandomSuffix: true,
       });
 
       const minSide = Math.min(plan.width, plan.height);

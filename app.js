@@ -123,10 +123,10 @@ async function finalizeResult(type, beforeUrl, rawUrl, params, ratio, mode, audi
   const finalParams = { ...params };
   let warning = null;
 
-  // Для видео всегда прогоняем через финальную обработку (звук: оставить/убрать),
-  // для фото — только если нужно поменять соотношение сторон.
-  if (ratio || type === 'video') {
-    statusEl.textContent = ratio ? ('Подгоняю под формат ' + ratio + '…') : 'Дообрабатываю звук…';
+  // Всегда прогоняем через финальную обработку: видео — звук (оставить/убрать),
+  // фото — конвертация в JPEG (Adobe Stock не принимает PNG для обычных фото).
+  {
+    statusEl.textContent = ratio ? ('Подгоняю под формат ' + ratio + '…') : 'Дообрабатываю файл…';
     try {
       const r = await fetch('/api/process-aspect', {
         method: 'POST',
