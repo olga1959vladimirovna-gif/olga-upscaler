@@ -118,6 +118,14 @@ h1 {
   cursor: pointer;
 }
 
+.duration-input {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  font-size: 14px;
+  width: 80px;
+}
+
 .ratio-btn.active {
   background: var(--teal);
   border-color: var(--teal);

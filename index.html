@@ -16,6 +16,7 @@
 
   <div class="tabs views">
     <button class="tab active" data-view="upload">Обработка</button>
+    <button class="tab" data-view="extend">Продлить</button>
     <button class="tab" data-view="history">История</button>
   </div>
 
@@ -63,6 +64,34 @@
     <div class="status" id="status"></div>
 
     <div class="result" id="result"></div>
+  </div>
+
+  <div id="extendView" style="display:none">
+    <p class="hint">Продли видео до нужной длительности (например, для минимума Adobe Stock). Оригинал не апскейлится — только меняется длительность.</p>
+
+    <div class="dropzone" id="extendDropzone">
+      <input type="file" id="extendFileInput" accept="video/*,.mov,.mp4,.webm,.m4v,.avi">
+      <p id="extendDropText">Выбери видеофайл</p>
+    </div>
+
+    <div class="ratio-row">
+      <span class="ratio-label">Целевая длительность (сек):</span>
+      <input type="number" id="targetDuration" value="6" min="1" max="60" step="0.5" class="duration-input">
+    </div>
+
+    <div class="ratio-row">
+      <span class="ratio-label">Способ:</span>
+      <div class="ratio-tabs">
+        <button class="ratio-btn active" data-extend-method="freeze">Заморозить последний кадр</button>
+        <button class="ratio-btn" data-extend-method="slow">Замедлить (слоу-мо)</button>
+      </div>
+    </div>
+
+    <button class="btn" id="extendBtn" disabled>Продлить</button>
+
+    <div class="status" id="extendStatus"></div>
+
+    <div class="result" id="extendResult"></div>
   </div>
 
   <div id="historyView" style="display:none">

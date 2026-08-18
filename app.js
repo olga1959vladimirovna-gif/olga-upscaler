@@ -6,6 +6,7 @@ let selectedFile = null;
 
 const viewTabs = document.querySelectorAll('.views .tab');
 const uploadView = document.getElementById('uploadView');
+const extendView = document.getElementById('extendView');
 const historyView = document.getElementById('historyView');
 const historyList = document.getElementById('historyList');
 
@@ -27,6 +28,7 @@ viewTabs.forEach((tab) => {
     tab.classList.add('active');
     const view = tab.dataset.view;
     uploadView.style.display = view === 'upload' ? '' : 'none';
+    extendView.style.display = view === 'extend' ? '' : 'none';
     historyView.style.display = view === 'history' ? '' : 'none';
     if (view === 'history') loadHistory();
   });
@@ -194,6 +196,11 @@ function formatDate(iso) {
 function formatParams(params) {
   if (!params) return '';
   const parts = [];
+  if (params.action === 'extend') {
+    parts.push('продление до ' + params.duration + ' сек');
+    parts.push(params.method === 'slow' ? 'замедление' : 'заморозка кадра');
+    return parts.join(' · ');
+  }
   if (params.scale_factor) parts.push('×' + params.scale_factor);
   if (params.target_resolution) parts.push(params.target_resolution);
   if (params.target_fps) parts.push(params.target_fps + ' fps');
@@ -277,5 +284,75 @@ submitBtn.addEventListener('click', async () => {
     statusEl.innerHTML = '<span class="error">Ошибка: ' + e.message + '</span>';
   } finally {
     submitBtn.disabled = false;
+  }
+});
+
+let extendSelectedFile = null;
+let extendMethod = 'freeze';
+
+const extendFileInput = document.getElementById('extendFileInput');
+const extendDropText = document.getElementById('extendDropText');
+const extendBtn = document.getElementById('extendBtn');
+const extendStatusEl = document.getElementById('extendStatus');
+const extendResultEl = document.getElementById('extendResult');
+const targetDurationInput = document.getElementById('targetDuration');
+const extendMethodBtns = document.querySelectorAll('.ratio-btn[data-extend-method]');
+
+extendMethodBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    extendMethodBtns.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    extendMethod = btn.dataset.extendMethod;
+  });
+});
+
+extendFileInput.addEventListener('change', () => {
+  extendSelectedFile = extendFileInput.files[0] || null;
+  extendBtn.disabled = !extendSelectedFile;
+  if (extendSelectedFile) {
+    extendDropText.textContent = extendSelectedFile.name + ' (' + Math.round(extendSelectedFile.size / 1024) + ' КБ)';
+  }
+});
+
+extendBtn.addEventListener('click', async () => {
+  if (!extendSelectedFile) return;
+  extendBtn.disabled = true;
+  extendResultEl.innerHTML = '';
+
+  try {
+    extendStatusEl.textContent = 'Загружаю файл в хранилище…';
+    const blob = await window.vercelBlobUpload(extendSelectedFile.name, extendSelectedFile, {
+      access: 'public',
+      handleUploadUrl: '/api/blob-upload',
+    });
+
+    extendStatusEl.textContent = 'Продлеваю видео…';
+
+    const r = await fetch('/api/extend-video', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        url: blob.url,
+        targetDuration: targetDurationInput.value,
+        method: extendMethod,
+      }),
+    });
+    const data = await r.json();
+
+    if (data.error) {
+      extendStatusEl.innerHTML = '<span class="error">Ошибка: ' + data.error + '</span>';
+      return;
+    }
+
+    extendStatusEl.innerHTML = 'Готово!' + (data.warning ? '<br><span class="warning">⚠ ' + data.warning + '</span>' : '');
+    extendResultEl.innerHTML =
+      '<video src="' + data.url + '" controls></video><br>' +
+      '<a class="download" href="' + data.url + '" target="_blank" rel="noopener">Скачать результат</a>';
+
+    saveHistoryEntry('video', blob.url, data.url, { action: 'extend', method: data.method, duration: data.duration });
+  } catch (e) {
+    extendStatusEl.innerHTML = '<span class="error">Ошибка: ' + e.message + '</span>';
+  } finally {
+    extendBtn.disabled = false;
   }
 });
