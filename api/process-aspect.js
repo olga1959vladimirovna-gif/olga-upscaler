@@ -19,7 +19,6 @@ const RATIOS = {
 };
 
 const MIN_SIDE = { photo: 2000, video: 1920 };
-const SILENCE_COVERAGE_THRESHOLD = 0.95;
 
 function cropPlan(width, height, targetRatio) {
   const sourceRatio = width / height;
@@ -73,22 +72,10 @@ async function probeVideo(filePath) {
   };
 }
 
-async function silenceCoverage(filePath, duration) {
-  if (!duration) return 0;
-  const { stderr } = await execFileAsync(ffmpegPath, [
-    '-i', filePath,
-    '-af', 'silencedetect=n=-40dB:d=0.3',
-    '-vn', '-f', 'null', '-',
-  ]).catch((e) => ({ stderr: e.stderr || '' }));
-  const matches = [...stderr.matchAll(/silence_duration:\s*([\d.]+)/g)];
-  const silentTotal = matches.reduce((sum, m) => sum + parseFloat(m[1]), 0);
-  return silentTotal / duration;
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { url, ratio, type, mode } = req.body || {};
+  const { url, ratio, type, mode, audioMode } = req.body || {};
   if (!url || !type) return res.status(400).json({ error: 'Нужны url, type' });
   if (ratio && !RATIOS[ratio]) return res.status(400).json({ error: 'Неизвестное соотношение: ' + ratio });
   const useMode = mode === 'pad' ? 'pad' : 'crop';
@@ -139,31 +126,23 @@ export default async function handler(req, res) {
       ? (useMode === 'pad' ? padPlan(info.width, info.height, RATIOS[ratio]) : cropPlan(info.width, info.height, RATIOS[ratio]))
       : { width: info.width, height: info.height, filter: null };
 
-    let audioAction = 'none';
-    if (info.hasAudio) {
-      const coverage = await silenceCoverage(inputPath, info.duration);
-      audioAction = coverage >= SILENCE_COVERAGE_THRESHOLD ? 'strip' : 'normalize';
-    }
+    const wantsAudio = audioMode === 'keep' && info.hasAudio;
+    const audioAction = !info.hasAudio ? 'none' : (wantsAudio ? 'kept' : 'removed');
 
-    const outExt = audioAction === 'normalize' ? '.mov' : '.mp4';
-    const outputPath = path.join(dir, 'output' + outExt);
+    const outputPath = path.join(dir, 'output.mp4');
 
     const videoArgs = plan.filter
       ? [(plan.filter.includes('[') ? '-filter_complex' : '-vf'), plan.filter, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '18']
       : ['-c:v', 'copy'];
 
-    let audioArgs;
-    if (audioAction === 'strip') audioArgs = ['-an'];
-    else if (audioAction === 'normalize') audioArgs = ['-c:a', 'pcm_s16le', '-ar', '48000'];
-    else audioArgs = [];
+    const audioArgs = wantsAudio ? ['-c:a', 'copy'] : ['-an'];
 
     const args = ['-y', '-i', inputPath, ...videoArgs, ...audioArgs, outputPath];
     await execFileAsync(ffmpegPath, args);
 
     const outBuf = await readFile(outputPath);
-    const contentType = outExt === '.mov' ? 'video/quicktime' : 'video/mp4';
-    const blob = await put('aspect-' + Date.now() + outExt, outBuf, {
-      access: 'public', contentType, addRandomSuffix: true,
+    const blob = await put('aspect-' + Date.now() + '.mp4', outBuf, {
+      access: 'public', contentType: 'video/mp4', addRandomSuffix: true,
     });
 
     const minSide = Math.min(plan.width, plan.height);

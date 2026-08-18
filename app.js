@@ -1,6 +1,7 @@
 let currentType = 'photo';
 let currentRatio = '';
 let currentMode = 'crop';
+let currentAudioMode = 'remove';
 let selectedFile = null;
 
 const viewTabs = document.querySelectorAll('.views .tab');
@@ -11,7 +12,9 @@ const historyList = document.getElementById('historyList');
 const typeTabs = document.querySelectorAll('.tabs:not(.views) .tab');
 const ratioBtns = document.querySelectorAll('.ratio-btn[data-ratio]');
 const modeBtns = document.querySelectorAll('.ratio-btn[data-mode]');
+const audioBtns = document.querySelectorAll('.ratio-btn[data-audio]');
 const modeRow = document.getElementById('modeRow');
+const audioRow = document.getElementById('audioRow');
 const fileInput = document.getElementById('fileInput');
 const dropText = document.getElementById('dropText');
 const submitBtn = document.getElementById('submitBtn');
@@ -40,7 +43,16 @@ typeTabs.forEach((tab) => {
     dropText.textContent = currentType === 'photo'
       ? 'Выбери файл фото (JPG/PNG)'
       : 'Выбери видеофайл (MP4, MOV, WEBM)';
+    audioRow.style.display = currentType === 'video' ? '' : 'none';
     resetState();
+  });
+});
+
+audioBtns.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    audioBtns.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentAudioMode = btn.dataset.audio;
   });
 });
 
@@ -77,7 +89,7 @@ function resetState() {
   resultEl.innerHTML = '';
 }
 
-async function poll(id, type, beforeUrl, params, ratio, mode) {
+async function poll(id, type, beforeUrl, params, ratio, mode, audioMode) {
   const r = await fetch('/api/status?id=' + id);
   const data = await r.json();
 
@@ -88,7 +100,7 @@ async function poll(id, type, beforeUrl, params, ratio, mode) {
 
   if (data.status === 'succeeded') {
     const rawUrl = extractUrl(data.output);
-    finalizeResult(type, beforeUrl, rawUrl, params, ratio, mode);
+    finalizeResult(type, beforeUrl, rawUrl, params, ratio, mode, audioMode);
     return;
   }
 
@@ -98,10 +110,10 @@ async function poll(id, type, beforeUrl, params, ratio, mode) {
   }
 
   statusEl.textContent = 'Обрабатываю… (' + data.status + ')';
-  setTimeout(() => poll(id, type, beforeUrl, params, ratio, mode), 2500);
+  setTimeout(() => poll(id, type, beforeUrl, params, ratio, mode, audioMode), 2500);
 }
 
-async function finalizeResult(type, beforeUrl, rawUrl, params, ratio, mode) {
+async function finalizeResult(type, beforeUrl, rawUrl, params, ratio, mode, audioMode) {
   if (!rawUrl) {
     statusEl.innerHTML = '<span class="error">Не удалось получить результат</span>';
     return;
@@ -111,15 +123,15 @@ async function finalizeResult(type, beforeUrl, rawUrl, params, ratio, mode) {
   const finalParams = { ...params };
   let warning = null;
 
-  // Для видео всегда прогоняем через финальную проверку (звук под стандарт Adobe),
+  // Для видео всегда прогоняем через финальную обработку (звук: оставить/убрать),
   // для фото — только если нужно поменять соотношение сторон.
   if (ratio || type === 'video') {
-    statusEl.textContent = ratio ? ('Подгоняю под формат ' + ratio + '…') : 'Проверяю соответствие требованиям Adobe…';
+    statusEl.textContent = ratio ? ('Подгоняю под формат ' + ratio + '…') : 'Дообрабатываю звук…';
     try {
       const r = await fetch('/api/process-aspect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: rawUrl, ratio: ratio || undefined, type, mode }),
+        body: JSON.stringify({ url: rawUrl, ratio: ratio || undefined, type, mode, audioMode }),
       });
       const data = await r.json();
       if (data.error) {
@@ -188,8 +200,8 @@ function formatParams(params) {
   if (params.scene) parts.push(params.scene);
   if (params.ratio) parts.push(params.ratio);
   if (params.mode) parts.push(params.mode === 'pad' ? 'с полями' : 'обрезка');
-  if (params.audio === 'strip') parts.push('звук убран (был пустой)');
-  if (params.audio === 'normalize') parts.push('звук приведён к 48кГц/16-бит');
+  if (params.audio === 'removed') parts.push('звук убран');
+  if (params.audio === 'kept') parts.push('звук оставлен');
   return parts.join(' · ');
 }
 
@@ -260,7 +272,7 @@ submitBtn.addEventListener('click', async () => {
       return;
     }
 
-    poll(data.id, currentType, blob.url, data.params, currentRatio, currentMode);
+    poll(data.id, currentType, blob.url, data.params, currentRatio, currentMode, currentAudioMode);
   } catch (e) {
     statusEl.innerHTML = '<span class="error">Ошибка: ' + e.message + '</span>';
   } finally {
