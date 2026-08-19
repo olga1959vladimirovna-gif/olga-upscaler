@@ -1,27 +1,40 @@
-import { put, list } from '@vercel/blob';
+import { put, list, del } from '@vercel/blob';
 
-const HISTORY_PATH = 'history.json';
+const PREFIX = 'history/';
 const MAX_ENTRIES = 30;
 const MAX_AGE_DAYS = 30;
 
-async function readHistory() {
-  const { blobs } = await list({ prefix: HISTORY_PATH, limit: 1 });
-  const match = blobs.find((b) => b.pathname === HISTORY_PATH);
-  if (!match) return [];
-  const r = await fetch(match.url, { cache: 'no-store' });
-  if (!r.ok) return [];
-  try {
-    return await r.json();
-  } catch {
-    return [];
-  }
+async function readAllEntries() {
+  const { blobs } = await list({ prefix: PREFIX });
+  const entries = await Promise.all(
+    blobs.map(async (b) => {
+      try {
+        const r = await fetch(b.url, { cache: 'no-store' });
+        if (!r.ok) return null;
+        const data = await r.json();
+        return { ...data, _blobUrl: b.url };
+      } catch {
+        return null;
+      }
+    })
+  );
+  return entries.filter(Boolean).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 }
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const history = await readHistory();
-      return res.status(200).json(history);
+      const all = await readAllEntries();
+      const cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+      const fresh = all.filter((e) => new Date(e.createdAt).getTime() > cutoff);
+      const keep = fresh.slice(0, MAX_ENTRIES);
+      const stale = all.filter((e) => !keep.includes(e));
+
+      if (stale.length) {
+        del(stale.map((e) => e._blobUrl)).catch(() => {});
+      }
+
+      return res.status(200).json(keep.map(({ _blobUrl, ...rest }) => rest));
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
@@ -34,8 +47,6 @@ export default async function handler(req, res) {
     }
 
     try {
-      const history = await readHistory();
-      const cutoff = Date.now() - MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
       const record = {
         id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
         createdAt: new Date().toISOString(),
@@ -44,14 +55,10 @@ export default async function handler(req, res) {
         beforeUrl: entry.beforeUrl,
         afterUrl: entry.afterUrl,
       };
-      const updated = [record, ...history]
-        .filter((e) => new Date(e.createdAt).getTime() > cutoff)
-        .slice(0, MAX_ENTRIES);
 
-      await put(HISTORY_PATH, JSON.stringify(updated), {
+      await put(PREFIX + record.id + '.json', JSON.stringify(record), {
         access: 'public',
         contentType: 'application/json',
-        allowOverwrite: true,
       });
 
       return res.status(200).json(record);
